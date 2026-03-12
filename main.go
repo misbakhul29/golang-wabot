@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
-	_ "modernc.org/sqlite"
+	"github.com/lrstanley/go-ytdlp"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -48,6 +51,18 @@ func main() {
 				})
 				if err != nil {
 					fmt.Printf("Error sending message: %v\n", err)
+				}
+			} else if strings.HasPrefix(strings.ToLower(msgText), "play ") && !v.Info.IsFromMe {
+				url := strings.TrimSpace(msgText[5:])
+				if url != "" {
+					fmt.Printf("Mendownload audio dari %s\n", url)
+					err := sendYouTubeAudio(client, v.Info.Chat, url)
+					if err != nil {
+						fmt.Printf("Error sending audio: %v\n", err)
+						client.SendMessage(context.Background(), v.Info.Chat, &waE2E.Message{
+							Conversation: proto.String(fmt.Sprintf("Gagal memutar lagu: %v", err)),
+						})
+					}
 				}
 			}
 		}
@@ -83,4 +98,47 @@ func main() {
 	<-c
 
 	client.Disconnect()
+}
+
+func sendYouTubeAudio(client *whatsmeow.Client, chat types.JID, url string) error {
+	tmpFile := "temp_audio.m4a"
+	os.Remove(tmpFile) // Hapus file lama jika ada
+
+	ytdlp.MustInstall(context.TODO(), nil)
+	dl := ytdlp.New().
+		Format("bestaudio[ext=m4a]/bestaudio").
+		Output(tmpFile).
+		NoPlaylist()
+
+	_, err := dl.Run(context.TODO(), url)
+	if err != nil {
+		return fmt.Errorf("gagal mendownload lagu: %v", err)
+	}
+	defer os.Remove(tmpFile)
+
+	audioBytes, err := os.ReadFile(tmpFile)
+	if err != nil {
+		return fmt.Errorf("gagal membaca file audio: %v", err)
+	}
+
+	uploaded, err := client.Upload(context.Background(), audioBytes, whatsmeow.MediaAudio)
+	if err != nil {
+		return err
+	}
+
+	msg := &waE2E.Message{
+		AudioMessage: &waE2E.AudioMessage{
+			URL:           proto.String(uploaded.URL),
+			DirectPath:    proto.String(uploaded.DirectPath),
+			MediaKey:      uploaded.MediaKey,
+			Mimetype:      proto.String("audio/mp4"),
+			FileEncSHA256: uploaded.FileEncSHA256,
+			FileSHA256:    uploaded.FileSHA256,
+			FileLength:    proto.Uint64(uint64(len(audioBytes))),
+			PTT:           proto.Bool(false),
+		},
+	}
+
+	_, err = client.SendMessage(context.Background(), chat, msg)
+	return err
 }
