@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/joho/godotenv"
+
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
@@ -23,6 +25,10 @@ import (
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("No .env file found, relying on environment variables")
+	}
+
 	dbLog := waLog.Stdout("Database", "DEBUG", true)
 	// Initialize SQLite store
 	container, err := sqlstore.New(context.Background(), "sqlite", "file:store.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", dbLog)
@@ -61,7 +67,7 @@ func main() {
 					go service.RequestImageGeneration(v.Info.Chat, prompt)
 
 					_, err := client.SendMessage(context.Background(), v.Info.Chat, &waE2E.Message{
-						Conversation: proto.String("Requesting image generation... Check console logs for status."),
+						Conversation: proto.String("Requesting image generation, Please wait..."),
 					})
 					if err != nil {
 						fmt.Printf("Error sending message: %v\n", err)

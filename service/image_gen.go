@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,11 +20,6 @@ import (
 
 var ChatMap sync.Map
 var WAClient *whatsmeow.Client
-
-const (
-	URL   = "https://testing-api-1.jaxnote.com/api/scraper/image/generate"
-	TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlUb2tlbiI6ImV5SjBlWEFpT2lKS1YxUWlMQ0poYkdjaU9pSklVekkxTmlKOS5leUpwYzNNaU9pSlBibXhwYm1VZ1NsZFVJRUoxYVd4a1pYSWlMQ0pwWVhRaU9qRTNNak0yTXpNeE1qRXNJbVY0Y0NJNk1UYzFOVEUyT1RFeU1Td2lZWFZrSWpvaWQzZDNMbVY0WVcxd2JHVXVZMjl0SWl3aWMzVmlJam9pYW5KdlkydGxkRUJsZUdGdGNHeGxMbU52YlNJc0lrZHBkbVZ1VG1GdFpTSTZJa3B2YUc1dWVTSXNJbE4xY201aGJXVWlPaUpTYjJOclpYUWlMQ0pGYldGcGJDSTZJbXB5YjJOclpYUkFaWGhoYlhCc1pTNWpiMjBpTENKU2IyeGxJanBiSWsxaGJtRm5aWElpTENKUWNtOXFaV04wSUVGa2JXbHVhWE4wY21GMGIzSWlYWDAuM3p0aEtxN2gydGo4UEUtb1c2WXRGQWY2RlAwYlY0X0kxRkE3TUlmMWtIQSIsImlhdCI6MTc3MzM4NjU4MywiZXhwIjoxNzczOTkxMzgzfQ.S8aiL-_LruUcRcBlAw6a5oQOUquEz_RLs3QPxaa04d4"
-)
 
 type ArticleData struct {
 	ID string `json:"id"`
@@ -62,7 +58,7 @@ func RequestImageGeneration(chat types.JID, userInput string) {
 	id := fmt.Sprintf("wabot-%d", time.Now().Unix())
 	ChatMap.Store(id, chat)
 
-	webhookURL := "https://59b9-182-253-212-120.ngrok-free.app/webhook/image"
+	webhookURL := fmt.Sprintf("%s/webhook/image", os.Getenv("WEBHOOK_HOSTNAME"))
 	if strings.Contains(webhookURL, "?") {
 		webhookURL += "&id=" + id
 	} else {
@@ -82,14 +78,17 @@ func RequestImageGeneration(chat types.JID, userInput string) {
 		return
 	}
 
-	req, err := http.NewRequest("POST", URL, bytes.NewBuffer(jsonData))
+	apiURL := os.Getenv("IMAGE_GEN_URL")
+	apiToken := os.Getenv("IMAGE_GEN_TOKEN")
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		fmt.Printf("❌ Error creating request: %v\n", err)
 		return
 	}
 
 	req.Header.Set("accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+TOKEN)
+	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
